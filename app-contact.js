@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {\
             var task = toBeWritten.shift();
             tabulator.panes.utils.webOperation('PUT', newBase + task.uri, {contentType: task.contentType}, function(uri, ok) {
                     if (ok) {
-                        tabulator.panes.utils.setACLUserPublic(tak.uri, me, [], function(){
+                        tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
                             if (ok) {
                                 doNextTask()
                             } else {
