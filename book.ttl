@@ -1,0 +1,10 @@
+
+# This is a dummy file in an instance of the app which
+# is only used for letting the user craete other instances somewhere else
+#  E.G is the app is published on a non-solid server like github.io where it can't run
+<> a <http://www.w3.org/2005/01/wf/flow#DummyResource>.
+
+
+
+# <#this> a <http://www.w3.org/2005/01/wf/flow#TemplateInstance>.
+#
