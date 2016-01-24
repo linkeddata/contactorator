@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {\
                                     if (ok) {
                                         doNextTask()
                                     } else {
-                                        complian("Error setting access permisssions for " + task.uri)
+                                        complain("Error setting access permisssions for " + task.uri)
                                     };
                                 })
                             } else {
@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {\
                                     if (ok) {
                                         doNextTask()
                                     } else {
-                                        complian("Error setting access permisssions for " + task.uri)
+                                        complain("Error setting access permisssions for " + task.uri)
                                     };
                                 })
                             } else {
