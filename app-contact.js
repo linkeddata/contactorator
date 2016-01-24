@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {\
             );
         }
 
-        doNextTask()();
+        doNextTask();
         
     }; // initializeNewInstanceAtBase
 
