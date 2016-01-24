@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    var complain = function(message) {
+        div.appendChild(tabulator.panes.utils.errorMessageBlock(dom, message, 'pink'));
+    };
+
 
     // Utility functions
     //          All these should be common and shipped elswehere
@@ -190,47 +194,62 @@ document.addEventListener('DOMContentLoaded', function() {\
     vcard:groupIndex <groups.ttl>. "
 
         var toBeWritten = [
-            { uri:   'book.ttl', content: bookContents, contentType: 'text/html' },
+            { uri:   'index.html', from: 'index.html', contentType: 'text/html' },
+            { uri:   'book.ttl', content: bookContents, contentType: 'text/turtle' },
             { uri:   'groups.ttl', content: '', contentType: 'text/turtle' },
             { uri:   'people.ttl', content: '', contentType: 'text/turtle'},
         ];
 
         var doNextTask = function() {
-            var task = toBeWritten.shift();
-            tabulator.panes.utils.webOperation('PUT', newBase + task.uri, {contentType: task.contentType}, function(uri, ok) {
-                    if (ok) {
-                        tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
+            if (toBeWritten.length === 0) {
+                claimSuccess(newBase, appInstanceNoun);
+            } else {
+                var task = toBeWritten.shift();
+                if (task.from) {
+                    tabulator.panes.utils.webCopy(base + task.from, newBase + task.uri, task.contentType, function(uri, ok) {
                             if (ok) {
-                                doNextTask()
+                                tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
+                                    if (ok) {
+                                        doNextTask()
+                                    } else {
+                                        complian("Error setting access permisssions for " + task.uri)
+                                    };
+                                })
                             } else {
-                                complian("Error setting access permisssions for " + task.uri)
-                            };
-                        })
-                    } else {
-                        complain();
-                    }
+                                complain("Error copying new file " + task.uri);
+                            }
+                        }
+                    );
+                } else {
+                    tabulator.panes.utils.webOperation('PUT', newBase + task.uri, {contentType: task.contentType}, function(uri, ok) {
+                            if (ok) {
+                                tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
+                                    if (ok) {
+                                        doNextTask()
+                                    } else {
+                                        complian("Error setting access permisssions for " + task.uri)
+                                    };
+                                })
+                            } else {
+                                complain("Error writing new file " + task.uri);
+                            }
+                        }
+                    );
                 }
-            );
+            }
         }
 
         doNextTask();
         
     }; // initializeNewInstanceAtBase
 
+    var claimSuccess = function(uri, appInstanceNoun) { // @@ delete or grey other stuff
+        var p = div.appendChild(dom.createElement('p'));
+        p.setAttribute('style', 'font-size: 140%;') 
+        p.innerHTML = 
+            "Your <a href='" + uri + "'><b>new " + appInstanceNoun + "</b></a> is ready. "+
+            "<br/><br/><a href='" + uri + "'>Go to new " + appInstanceNoun + "</a>";
 
-    // Manage participation in this session @@ TBD
-    //
-    //  This is more general tham the pad.
-    //
-    var manageParticipation = function(subject) {
-        if (!me) throw "Unknown user";
-        var parps = kb.each(subject, ns.wf('participation')).filter(function(pn){
-            kb.hold(pn, ns.dc('author'), me)});
-        if (parps.length > 1) throw "Multiple participations";
-        if (!parps.length) {
-            participation = tabulator.panes.utils.newThing(appRootDoc);
-        }
-    
     }
 
 
