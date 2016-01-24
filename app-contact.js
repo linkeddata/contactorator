@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var showBootstrap = function showBootstrap(thisInstance, container, noun) {
         var div = utils.clearElement(container);
         var na = div.appendChild(tabulator.panes.utils.newAppInstance(
-            dom, "Start a new " + noun + " in a workspace", initializeNewInstanceInWorkspace));
+            dom, "Start a new " + noun , initializeNewInstanceInWorkspace));
         
         var hr = div.appendChild(dom.createElement('hr')); // @@
         
@@ -118,27 +118,35 @@ document.addEventListener('DOMContentLoaded', function() {
             if (newBase.slice(-1) !== '/') {
                 newBase += '/';
             }
-            initializeNewInstanceAtBase(thisInstance, newBase);
+            var sisu = tabulator.panes.utils.signInOrSignUpBox(dom, function(id) {
+                me = $rdf.sym(id);
+                initializeNewInstanceAtBase(thisInstance, newBase);
+            });
+            div.appendChild(sisu);
         });
+        
     } 
           
 
     /////////  Create new document files for new instance of app
 
-    var initializeNewInstanceInWorkspace = function(ws) {
+    var initializeNewInstanceInWorkspace = function(ws, wsBase) {
+        //
+        /*
         var newBase = kb.any(ws, ns.space('uriPrefix'));
         if (!newBase) {
             newBase = ws.uri.split('#')[0];
         } else {
 	    newBase = newBase.value;
 	}
+        */
         if (newBase.slice(-1) !== '/') {
             $rdf.log.error(appPathSegment + ": No / at end of uriPrefix " + newBase ); // @@ paramater?
-            newBase = newBase + '/';
+            wsBase = wsBase + '/';
         }
+
         var now = new Date();
-        newBase += appPathSegment + '/id'+ now.getTime() + '/'; // unique id 
-        
+        newBase =  wsBase + appPathSegment + '/id'+ now.getTime() + '/'; // unique id
         initializeNewInstanceAtBase(thisInstance, newBase);
     }
     
@@ -151,87 +159,70 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var here = $rdf.sym(thisInstance.uri.split('#')[0]);
 
-        var sp = tabulator.ns.space;
-        var kb = tabulator.kb;
-        
-        var htmlContents = "<!DOCTYPE html>\
-<html>\
-<head><meta charset='UTF-8'>\
-<link type='text/css' rel='stylesheet' href='../Library/Mashup/tabbedtab.css' />\
-<script type='text/javascript' src='../Library/Mashup/mashlib-alpha.js'></script>\
-<script>\
-document.addEventListener('DOMContentLoaded', function() {\
-    var uri = window.location.href;\
-    var data_uri = window.document.title = uri.slice(0, uri.lastIndexOf('/')+1) + 'book.ttl#this';\
-    \
-    var path = uri.indexOf('/', uri.indexOf('//') +2) + 1;\
-    var origin = uri.slice(0, path);\
-    var proxy_uri = 'https://databox.me/,proxy?uri={uri}' \
-\
-    $rdf.Fetcher.crossSiteProxyTemplate = proxy_uri;\
-    \
-    var subject = $rdf.sym(data_uri);\
-    tabulator.outline.GotoSubject(subject, true, undefined, true, undefined);\
-});\
-</script>\
-</head>\
-<body>\
-<div class='TabulatorOutline' id='DummyUUID'>\
-    <table id='outline'></table>\
-</div>\
-</body>\
-</html>"
-
-        
-        var bookContents = "@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.\
-@prefix ab: <http://www.w3.org/ns/pim/ab#>.\
-@prefix dc: <http://purl.org/dc/elements/1.1/>.\
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.\
-\
-<#this> a vcard:AddressBook;\
-    dc:title 'New address Book';\
-    vcard:nameEmailIndex <people.ttl>;\
-    vcard:groupIndex <groups.ttl>. "
+        var bookContents = '@prefix vcard: <http://www.w3.org/2006/vcard/ns#>.\n\
+@prefix ab: <http://www.w3.org/ns/pim/ab#>.\n\
+@prefix dc: <http://purl.org/dc/elements/1.1/>.\n\
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.\n\
+\n\
+<#this> a vcard:AddressBook;\n\
+    dc:title "New address Book";\n\
+    vcard:nameEmailIndex <people.ttl>;\n\
+    vcard:groupIndex <groups.ttl>. \n\n'
+    
+        bookContents += '<#this> <http://www.w3.org/ns/auth/acl#owner> <' + me.uri + '>.\n\n';
 
         var toBeWritten = [
-            { uri:   'index.html', from: 'index.html', contentType: 'text/html' },
-            { uri:   'book.ttl', content: bookContents, contentType: 'text/turtle' },
-            { uri:   'groups.ttl', content: '', contentType: 'text/turtle' },
-            { uri:   'people.ttl', content: '', contentType: 'text/turtle'},
+            { to:   'index.html', contentType: 'text/html' },
+            { to:   'book.ttl', content: bookContents, contentType: 'text/turtle' },
+            { to:   'groups.ttl', content: '', contentType: 'text/turtle' },
+            { to:   'people.ttl', content: '', contentType: 'text/turtle'},
         ];
+
+        var newAppPointer = newBase + 'index.html'; // @@ assuming we can't trust server with bare dir
+
+        var offline = tabulator.panes.utils.offlineTestID();
+        if (offline) {
+            toBeWritten.push( {to: 'local.html', from: 'local.html', contentType: 'text/html' });
+            newAppPointer = newBase + 'local.html'; // kludge for testing
+        }
 
         var doNextTask = function() {
             if (toBeWritten.length === 0) {
-                claimSuccess(newBase, appInstanceNoun);
+                claimSuccess(newAppPointer, appInstanceNoun);
             } else {
                 var task = toBeWritten.shift();
-                if (task.from) {
-                    tabulator.panes.utils.webCopy(base + task.from, newBase + task.uri, task.contentType, function(uri, ok) {
+                console.log("Creating new file "+ task.to + " in new instance ")
+                var dest = $rdf.uri.join(task.to, newBase); //
+                if ('content' in task) {
+                    tabulator.panes.utils.webOperation('PUT', dest,
+                        { data: task.content, saveMetadata: true, contentType: task.contentType},
+                        function(uri, ok) {
                             if (ok) {
-                                tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
+                                tabulator.panes.utils.setACLUserPublic(dest, me, [], function(){
                                     if (ok) {
                                         doNextTask()
                                     } else {
-                                        complain("Error setting access permisssions for " + task.uri)
+                                        complain("Error setting access permisssions for " + task.to)
                                     };
                                 })
                             } else {
-                                complain("Error copying new file " + task.uri);
+                                complain("Error writing new file " + task.to);
                             }
                         }
                     );
                 } else {
-                    tabulator.panes.utils.webOperation('PUT', newBase + task.uri, {contentType: task.contentType}, function(uri, ok) {
+                    var from = task.from || task.to; // default source to be same as dest
+                    tabulator.panes.utils.webCopy(base + from, dest, task.contentType, function(uri, ok) {
                             if (ok) {
-                                tabulator.panes.utils.setACLUserPublic(task.uri, me, [], function(){
+                                tabulator.panes.utils.setACLUserPublic(dest, me, [], function(){
                                     if (ok) {
                                         doNextTask()
                                     } else {
-                                        complain("Error setting access permisssions for " + task.uri)
+                                        complain("Error setting access permisssions for " + task.to)
                                     };
                                 })
                             } else {
-                                complain("Error writing new file " + task.uri);
+                                complain("Error copying new file " + task.to);
                             }
                         }
                     );
@@ -244,6 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {\
     }; // initializeNewInstanceAtBase
 
     var claimSuccess = function(uri, appInstanceNoun) { // @@ delete or grey other stuff
+        console.log("Files created. App ready at " + uri)
         var p = div.appendChild(dom.createElement('p'));
         p.setAttribute('style', 'font-size: 140%;') 
         p.innerHTML = 
@@ -283,6 +275,13 @@ document.addEventListener('DOMContentLoaded', function() {\
     var showResults = function(exists) {
         console.log("showResults()");
         
+        var proxy_uri = 'https://databox.me/,proxy?uri={uri}' // Temp hack @@
+        $rdf.Fetcher.crossSiteProxyTemplate = proxy_uri;
+        
+        tabulator.outline.GotoSubject(subject, true, undefined, true, undefined);
+
+        /*
+        
         whoAmI(appRootDoc); // Set me  even if on a plane
         
         var title = kb.any(subject, ns.dc('title'))
@@ -290,10 +289,11 @@ document.addEventListener('DOMContentLoaded', function() {\
             window.document.title = title.value;
         }
         options.exists = exists;
-        appEle = (tabulator.panes.utils.notepad(dom, appRootDoc, subject, me, options));
+        appEle = (tabulator.panes.utils.notepad(dom, appRootDoc, subject, me, options)); // @@@@@@@@
         naviMain.appendChild(appEle);
         
         var initiated = tabulator.sparql.setRefreshHandler(appRootDoc, appEle.reloadAndSync);
+        */
     };
     
     var showSignon = function showSignon() {
@@ -317,37 +317,22 @@ document.addEventListener('DOMContentLoaded', function() {\
     var loadAppData = function () {
         var div = naviMain;
         fetcher.nowOrWhenFetched(appRootDoc.uri, undefined, function(ok, body, xhr){
-            if (!ok) {   
-                if (0 + xhr.status === 404) { ///  Check explictly for 404 error
-                    console.log("Initializing app data file " + appRootDoc)
-                    updater.put(appRootDoc, [], 'text/turtle', function(uri2, ok, message, xhr) {
-                        if (ok) {
-                            kb.fetcher.saveRequestMetadata(xhr, kb, appRootDoc.uri);
-                            kb.fetcher.saveResponseMetadata(xhr, kb); // Drives the isEditable question
-                            utils.clearElement(naviMain);
-                            showResults(false);
-                        } else {
-                            complainIfBad(ok, "FAILED to create app data file at: "+ appRootDoc.uri +' : ' + message);
-                            console.log("FAILED to craete app data file at: "+ appRootDoc.uri +' : ' + message);
-                        };
-                    });
-                } else { // Other error, not 404 -- do not try to overwite the file
-                    complainIfBad(ok, "FAILED to read app data file: " + body);
-                }
+            if (!ok) {
+                complain("FAILED to read app data file: " + body);
             } else { // Happy read
                 utils.clearElement(naviMain);
                 if (kb.holds(subject.doc(), ns.rdf('type'), ns.wf('DummyResource'))) {
                     showBootstrap(subject, naviMain, appInstanceNoun);
                 } else {
                     showResults(true);
-                    naviMiddle3.appendChild(newInstanceButton("pad"));
+                    // naviMiddle3.appendChild(newInstanceButton(appInstanceNoun));
                 }
             }
         });
     };
         
     ////////////////////////////////////////////// Body of App (on loaded lstner)
-
+    
 
 
     var appPathSegment = 'contactorator.timbl.com';
