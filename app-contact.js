@@ -176,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
             { to:   'book.ttl', content: bookContents, contentType: 'text/turtle' },
             { to:   'groups.ttl', content: '', contentType: 'text/turtle' },
             { to:   'people.ttl', content: '', contentType: 'text/turtle'},
+            { to:   '', existing: true, aclOptions: { defaultForNew: true}},
         ];
 
         var newAppPointer = newBase + 'index.html'; // @@ assuming we can't trust server with bare dir
@@ -186,6 +187,10 @@ document.addEventListener('DOMContentLoaded', function() {
             newAppPointer = newBase + 'local.html'; // kludge for testing
         }
 
+        // Ask user abut ACLs?
+        //
+        //   Add header to PUT     If-None-Match: *       to prevent overwrite
+        //
         var doNextTask = function() {
             if (toBeWritten.length === 0) {
                 claimSuccess(newAppPointer, appInstanceNoun);
@@ -193,39 +198,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 var task = toBeWritten.shift();
                 console.log("Creating new file "+ task.to + " in new instance ")
                 var dest = $rdf.uri.join(task.to, newBase); //
+                var aclOptions = task.aclOptions || {};
+                var checkOKSetACL = function(uri, ok) {
+                    if (ok) {
+                        tabulator.panes.utils.setACLUserPublic(dest, me, aclOptions, function(){
+                            if (ok) {
+                                doNextTask()
+                            } else {
+                                complain("Error setting access permisssions for " + task.to)
+                            };
+                        })
+                    } else {
+                        complain("Error writing new file " + task.to);
+                    }
+                };
+
                 if ('content' in task) {
                     tabulator.panes.utils.webOperation('PUT', dest,
                         { data: task.content, saveMetadata: true, contentType: task.contentType},
-                        function(uri, ok) {
-                            if (ok) {
-                                tabulator.panes.utils.setACLUserPublic(dest, me, [], function(){
-                                    if (ok) {
-                                        doNextTask()
-                                    } else {
-                                        complain("Error setting access permisssions for " + task.to)
-                                    };
-                                })
-                            } else {
-                                complain("Error writing new file " + task.to);
-                            }
-                        }
-                    );
+                    checkOKSetACL);
+                } else if ('existing' in task) {
+                    checkOKSetACL(true, dest);
                 } else {
                     var from = task.from || task.to; // default source to be same as dest
-                    tabulator.panes.utils.webCopy(base + from, dest, task.contentType, function(uri, ok) {
-                            if (ok) {
-                                tabulator.panes.utils.setACLUserPublic(dest, me, [], function(){
-                                    if (ok) {
-                                        doNextTask()
-                                    } else {
-                                        complain("Error setting access permisssions for " + task.to)
-                                    };
-                                })
-                            } else {
-                                complain("Error copying new file " + task.to);
-                            }
-                        }
-                    );
+                    tabulator.panes.utils.webCopy(base + from, dest, task.contentType, checkOKSetACL);
                 }
             }
         }
